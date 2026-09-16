@@ -155,6 +155,9 @@ jobs:
           ./scripts/diffconfig.sh | tee ../taixingren-m3.config
           grep -q '^CONFIG_TARGET_ramips_mt7621_DEVICE_phicomm_k2p=y$' .config
           grep -q '^CONFIG_PACKAGE_kmod-mmc-mtk=y$' .config
+          for package in kmod-inet-diag kmod-nft-socket kmod-nft-tproxy kmod-tun kmod-dummy; do
+            grep -q "^CONFIG_PACKAGE_${package}=y$" .config
+          done
 
       - name: Download sources
         working-directory: immortalwrt

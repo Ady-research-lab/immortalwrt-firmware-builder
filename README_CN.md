@@ -58,6 +58,20 @@ kmod-nls-utf8
 kmod-mmc-mtk 会自动带入 MMC 核心模块。不要同时加入
 kmod-sdhci-mt7620，两套驱动在 ImmortalWrt 中声明为冲突。
 
+固件还预装 OpenClash 和 luci-app-nikki 所需的内核模块：
+
+~~~text
+kmod-inet-diag
+kmod-nft-socket
+kmod-nft-tproxy
+kmod-tun
+kmod-dummy
+~~~
+
+kmod-nft-socket 和 kmod-nft-tproxy 会自动带入匹配同一次构建内核 ABI 的
+kmod-nf-socket、kmod-nf-tproxy 等依赖。代理程序、规则和数据库仍建议安装
+到 TF 卡 Extroot，避免占用内部 Flash。
+
 可按需通过 extra_packages 添加维护工具：
 
 ~~~text
