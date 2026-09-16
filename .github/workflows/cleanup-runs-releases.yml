@@ -39,6 +39,6 @@ jobs:
         with:
           keep_latest: 10
           delete_tags: true
-          delete_tag_pattern: '^immortalwrt-.*'
+          delete_tag_pattern: '^taixingren-m3-.*'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

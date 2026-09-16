@@ -1,112 +1,113 @@
-# ImmortalWrt 固件构建器
-
-[![ImmortalWrt Builder](https://github.com/coachpo/immortalwrt-firmware-builder/actions/workflows/build-firmware.yml/badge.svg?branch=main)](https://github.com/coachpo/immortalwrt-firmware-builder/actions/workflows/build-firmware.yml)
-[![Latest Release](https://img.shields.io/github/v/release/coachpo/immortalwrt-firmware-builder?sort=semver&style=flat-square&label=Release&logo=github)](https://github.com/coachpo/immortalwrt-firmware-builder/releases/latest)
-[![Downloads (latest)](https://img.shields.io/github/downloads/coachpo/immortalwrt-firmware-builder/latest/total?style=flat-square&label=Downloads&logo=github)](https://github.com/coachpo/immortalwrt-firmware-builder/releases/latest)
+# 钛星人 M3 ImmortalWrt 云编译
 
 [English](README.md) | 简体中文
 
-用于构建并（可选）发布 Cudy TR3000 和小米 CR6606 的 ImmortalWrt 固件的种子配置与 GitHub Actions 工作流。CI 会在运行时把 `immortalwrt/immortalwrt` 检出到已忽略的 `immortalwrt/` 目录。
+这是一个面向钛星人 M3 的实验性 ImmortalWrt 构建项目。它使用 GitHub
+Actions 检出官方 immortalwrt/immortalwrt 源码，默认固定到
+v24.10.6，无需在本地准备完整编译环境。
 
-- Cudy TR3000 (Filogic)
-- Xiaomi CR6606 (MT7621)
+项目以当前已验证可运行的斐讯 K2P 配置为基础，只做与 M3 相关的必要改动：
 
-每个 `seed.config` 都用于复制到源码树根目录，通过 `make defconfig` 展开为完整的 `.config`。在编译前，你也可以通过 `make menuconfig` 进行交互式调整。
+- 保留 phicomm,k2p 设备名称和现有升级兼容性。
+- 保留已在实机正常工作的 K2P Flash 分区、网口、无线校准和 LED 配置。
+- 启用 MT7621 原生 SDHCI 控制器，以支持 M3 的 TF 卡槽。
+- 预装 kmod-mmc-mtk、block-mount、EXT4、FAT32 和 UTF-8 支持。
+- 将 K2P 标记为可迁移来源，使现有 K2P 固件可以先用 sysupgrade -T
+  检查 M3 镜像兼容性。
+
+> [!WARNING]
+> 这是根据实机运行状态和 MT7621 同类设备推导出的首个测试版本，不是
+> ImmortalWrt 官方支持机型。首次刷写前必须备份 Flash，并确认可以通过
+> Breed 或串口恢复。若 sysupgrade -T 检查失败，不要使用 -F 强刷。
+
+## GitHub Actions 使用方法
+
+1. 将本仓库推送到你自己的 GitHub 仓库。
+2. 打开仓库的 **Actions** 页面。
+3. 选择 **Build Taixingren M3 firmware**。
+4. 点击 **Run workflow**。
+5. 保持 immortalwrt_ref 为 v24.10.6。
+6. 如需额外预装包，在 extra_packages 中输入以空格分隔的包名。
+7. 构建完成后，从该次运行的 **Artifacts** 下载固件。
+
+默认会生成并上传：
+
+- phicomm_k2p 的 squashfs-sysupgrade.bin
+- manifest 和构建信息
+- 实际展开后的差异配置
+- SHA-256 校验文件
+
+只有主动勾选 publish_release 时，工作流才会额外创建 GitHub Release。
+
+## 软件包组成
+
+ImmortalWrt 会自动加入完整路由器默认包，包括基础系统、netifd、
+dnsmasq-full、firewall4、nftables、Dropbear SSH、LuCI、PPPoE、IPv6 和
+wpad-openssl。K2P profile 继续包含现有固件使用的 kmod-mt7615-firmware。
+
+首版另外加入识别和挂载 TF 卡所需组件：
+
+~~~text
+kmod-mmc-mtk
+block-mount
+kmod-fs-ext4
+kmod-fs-vfat
+kmod-nls-utf8
+~~~
+
+kmod-mmc-mtk 会自动带入 MMC 核心模块。不要同时加入
+kmod-sdhci-mt7620，两套驱动在 ImmortalWrt 中声明为冲突。
+
+可按需通过 extra_packages 添加维护工具：
+
+~~~text
+e2fsprogs dosfstools fdisk
+~~~
+
+luci-app-diskman 也可以加入，但依赖较多；M3 只有 16MB Flash，建议先
+完成 TF 卡识别测试，再决定是否加入。
 
 ## 仓库结构
-- `tr3000/seed.config` — TR3000 功能更完整的配置。
-- `cr6606/seed.config` — CR6606 轻量配置。
-- `immortalwrt/` — 已忽略的运行时源码检出目录，由本地命令或 CI 填充。
-- `.github/workflows/build-firmware.yml` — 拉取 ImmortalWrt、构建、缓存并发布固件。
-- `.github/workflows/cleanup-runs-releases.yml` — 定期清理旧 workflow runs 与兼容的 `immortalwrt-*` Releases。
 
-## 快速开始
-方式 A：在本仓库中把 ImmortalWrt 克隆到已忽略的运行时目录：
+~~~text
+.github/workflows/build-firmware.yml
+taixingren-m3/
+├── seed.config
+└── patches/
+    └── 0001-enable-tf-card-for-k2p-profile.patch
+~~~
 
-```bash
-git clone https://github.com/coachpo/immortalwrt-firmware-builder.git
-cd immortalwrt-firmware-builder
-git clone --depth=1 https://github.com/immortalwrt/immortalwrt.git immortalwrt
-# 可选：与 CI 的 immortalwrt_ref 输入一致，切换到指定分支、标签或 SHA
-# git -C immortalwrt fetch --depth=1 origin <branch-tag-or-sha>
-# git -C immortalwrt checkout --detach FETCH_HEAD
+- seed.config：目标机型及额外预装软件包清单。
+- patches/*.patch：修改 K2P 设备树与 profile，启用 SDHCI 并加入驱动。
+- Actions 工作流：检出官方源码、应用上述改动、编译并上传固件。
 
-cd immortalwrt
-./scripts/feeds update -a && ./scripts/feeds install -a
-cp ../tr3000/seed.config .config    # TR3000 功能更全面
-# 或
-cp ../cr6606/seed.config .config    # CR6606 轻量
-make defconfig
-make menuconfig    # 可选
-make -j"$(nproc)" V=sc
-```
+## 刷写前检查
 
-方式 B：在你自己的 ImmortalWrt（或 OpenWrt）源码树根目录使用种子配置：
+在现有固件中先备份至少以下 MTD 分区：
 
-```bash
-cp /path/to/immortalwrt-firmware-builder/tr3000/seed.config .config    # TR3000 功能更全面
-# 或
-cp /path/to/immortalwrt-firmware-builder/cr6606/seed.config .config    # CR6606 轻量
-make defconfig
-make menuconfig    # 可选
-make -j"$(nproc)" V=sc
-```
+~~~sh
+dd if=/dev/mtd0 of=/tmp/mtd0-u-boot.bin
+dd if=/dev/mtd1 of=/tmp/mtd1-u-boot-env.bin
+dd if=/dev/mtd2 of=/tmp/mtd2-factory.bin
+dd if=/dev/mtd3 of=/tmp/mtd3-permanent_config.bin
+~~~
 
-编译完成后的固件镜像会生成在 `bin/targets/<target>/<subtarget>/` 目录下。
+备份文件必须复制到路由器之外保存。上传新镜像后先检查：
 
-## GitHub Actions（workflow_dispatch）
-工作流：**Build ImmortalWrt firmware**（`.github/workflows/build-firmware.yml`）。
+~~~sh
+sysupgrade -T /tmp/immortalwrt-*-phicomm_k2p-squashfs-sysupgrade.bin
+~~~
 
-输入：
-- `immortalwrt_ref`：可选的 `immortalwrt/immortalwrt` 分支、标签或 SHA；留空时使用上游默认分支，或仓库变量 `IMMORTALWRT_REF`。
-- `cache_epoch`：可选缓存命名空间；留空时使用仓库变量 `CACHE_EPOCH` 或 `v1`。
+只有返回兼容且已确认恢复手段后，才进入实际刷写测试。
 
-行为：
-- 以 `submodules: false` 检出本仓库，然后在运行时把 `immortalwrt/immortalwrt` 检出到 `immortalwrt/`。
-- 使用现有 `cr6606/seed.config` 与 `tr3000/seed.config` 分别构建两个机型，并保留 `immortalwrt-*` Release 标签前缀兼容性。
-- 分离 `ccache` 与 `dl` 缓存，按机型、ImmortalWrt ref、seed hash 与 cache epoch 生成 key。
-- GitHub 缓存创建后不可原地修改。需要刷新时，修改 `cache_epoch` 输入或仓库变量 `CACHE_EPOCH`；工作流会从旧匹配缓存恢复，再保存到新的命名空间。
-- 成功后上传 7 天保留的构建产物，并发布包含固件和 manifest 的 Release。
+## 来源
 
-清理工作流：**Cleanup workflow runs and releases**（`.github/workflows/cleanup-runs-releases.yml`）会定期清理旧 workflow runs 与兼容的 `immortalwrt-*` Releases。
-
-## 启用的包与功能对比
-
-下表对比了两个种子配置启用的功能。
-
-| CR6606 | TR3000 | 功能 | 用途 | 备注 |
-| --- | --- | --- | --- | --- |
-| ✅ | ✅ | LuCI Web UI + 主题 | 通过主题（Bootstrap/Argon + 中文界面）进行 Web 管理 | |
-| ✅ | ✅ | Web 服务器（LuCI） | 使用 uHTTPd 提供 LuCI 服务 | |
-| ✅ | ✅ | 无线 | Wi‑Fi 6 支持（MT7915E 驱动、regdb）与 WPA2/3（wpad-openssl） | |
-| ✅ | ✅ | QoS（基于 nftables） | 使用 nft-qos 的简单带宽/QoS 管理（+ 中文界面） | |
-| ✅ | ✅ | 诊断 | 基础排障工具（iperf3、tcpdump、htop） | |
-| ✅ | ✅ | Web 终端 | 浏览器内 Shell（ttyd，含中文界面） | |
-| ✅ | ✅ | 本地发现 | mDNS/Bonjour 与名称解析（Avahi、nss-mdns） | |
-| ✅ | ✅ | UPnP IGD | 自动端口转发（miniupnpd-nftables + 中文界面） | |
-| ✅ | ✅ | 通过 Cloudflared 的 DoH | DNS over HTTPS 隧道，含 LuCI UI（中文） | |
-| ✅ | ✅ | HTTPS DNS Proxy | 轻量级 DoH 客户端，含 LuCI UI（中文） | |
-| ✅ | ✅ | 广告拦截 | 基于 DNS 的广告/恶意域名拦截（中文界面） | |
-| ✅ | ✅ | DNS/DHCP 后端 | 功能完整的 dnsmasq（DNSSEC、DHCPv6、TFTP、权威） | |
-| ✅ | ✅ | TLS/加密 | OpenSSL TLS 后端（curl/wget-ssl），系统级 OpenSSL 配置 | |
-| ✅ | ✅ | IPv6 支持 | DHCPv6 与 IPv6 DHCP 服务（odhcp6c、odhcpd） | |
-| ✅ | ✅ | 防火墙 | 基于 nftables 的 firewall4 | |
-| ✅ | ✅ | CA 证书 | 根证书集合用于 TLS 校验 | |
-| ✅ | ✅ | 软件包管理器 UI | 在 LuCI 中管理软件包（中文界面） | |
-| ✅ | ✅ | 网络工具 | socat 及其 LuCI 界面（中文） | |
-| ✅ | ✅ | 高级网络工具 | 丰富的网络工具（curl、wget、arping 等） | |
-| ✅ | ✅ | 编辑器（vim） | 功能完善的命令行编辑器 | |
-| ❌ | ✅ | 文件共享 | Samba4 服务器（含 Avahi、NetBIOS、VFS、WSDD2 + 中文界面） | CR6606 无 USB 接口 |
-| ❌ | ✅ | USB 打印 | 打印服务器（p910nd JetDirect）及 LuCI UI（中文） | CR6606 无 USB 接口 |
-| ❌ | ✅ | 磁盘管理 | LuCI 磁盘管理（Btrfs、NTFS3 支持 + 中文界面） | CR6606 无 USB 接口 |
-| ❌ | ✅ | 存储与文件系统 | 完整的文件系统支持（ext4、Btrfs、exFAT、NTFS3） | CR6606 无 USB 接口 |
-| ❌ | ✅ | USB 网络 | 广泛的 USB 转以太网适配器支持 | CR6606 无 USB 接口 |
-| ❌ | ✅ | USB 工具 | USB 工具与设备识别 | CR6606 无 USB 接口 |
-| ❌ | ✅ | 文件管理器 | LuCI Web 文件管理器（中文界面） | CR6606 无 USB 接口 |
-
+工作流结构基于
+[coachpo/immortalwrt-firmware-builder](https://github.com/coachpo/immortalwrt-firmware-builder)，
+固件源码来自
+[immortalwrt/immortalwrt](https://github.com/immortalwrt/immortalwrt)。
 
 ## 许可证
 
-本项目使用 MIT 许可证 - 详情见 [LICENSE](LICENSE) 文件。
-
-
+构建项目使用 [MIT License](LICENSE)。ImmortalWrt 及其设备树、内核和软件包
+分别遵循各自的上游许可证。

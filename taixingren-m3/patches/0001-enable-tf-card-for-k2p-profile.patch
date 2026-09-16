@@ -1,0 +1,27 @@
+diff --git a/target/linux/ramips/dts/mt7621_phicomm_k2p.dts b/target/linux/ramips/dts/mt7621_phicomm_k2p.dts
+--- a/target/linux/ramips/dts/mt7621_phicomm_k2p.dts
++++ b/target/linux/ramips/dts/mt7621_phicomm_k2p.dts
+@@ -173,6 +173,10 @@
+ 	};
+ };
+ 
++&sdhci {
++	status = "okay";
++};
++
+ &state_default {
+ 	gpio {
+ 		groups = "i2c", "jtag";
+diff --git a/target/linux/ramips/image/mt7621.mk b/target/linux/ramips/image/mt7621.mk
+--- a/target/linux/ramips/image/mt7621.mk
++++ b/target/linux/ramips/image/mt7621.mk
+@@ -2500,7 +2500,8 @@ define Device/phicomm_k2p
+   DEVICE_ALT0_VENDOR := Phicomm
+   DEVICE_ALT0_MODEL := KE 2P
+   SUPPORTED_DEVICES += k2p
+-  DEVICE_PACKAGES := kmod-mt7615-firmware -uboot-envtools
++  DEVICE_PACKAGES := kmod-mt7615-firmware kmod-mmc-mtk block-mount \
++	kmod-fs-ext4 kmod-fs-vfat kmod-nls-utf8 -uboot-envtools
+ endef
+ TARGET_DEVICES += phicomm_k2p
+ 
